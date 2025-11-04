@@ -2,6 +2,7 @@ import { TProject } from "@/types/project";
 import { MediaFile } from "@/types/media";
 import { IndexedDBAdapter } from "./indexeddb-adapter";
 import { OPFSAdapter } from "./opfs-adapter";
+import { IndexedDBFileAdapter } from "./indexeddb-file-adapter";
 import {
   MediaFileData,
   StorageConfig,
@@ -11,6 +12,7 @@ import {
 } from "./types";
 import { TimelineTrack } from "@/types/timeline";
 import { SavedSoundsData, SavedSound, SoundEffect } from "@/types/sounds";
+import { StorageAdapter } from "./types";
 
 class StorageService {
   private projectsAdapter: IndexedDBAdapter<SerializedProject>;
@@ -40,14 +42,24 @@ class StorageService {
   }
 
   // Helper to get project-specific media adapters
-  private getProjectMediaAdapters({ projectId }: { projectId: string }) {
+  private getProjectMediaAdapters({ projectId }: { projectId: string }): {
+    mediaMetadataAdapter: IndexedDBAdapter<MediaFileData>;
+    mediaFilesAdapter: StorageAdapter<File>;
+  } {
     const mediaMetadataAdapter = new IndexedDBAdapter<MediaFileData>(
       `${this.config.mediaDb}-${projectId}`,
       "media-metadata",
       this.config.version
     );
 
-    const mediaFilesAdapter = new OPFSAdapter(`media-files-${projectId}`);
+    // Use OPFS if supported, otherwise fall back to IndexedDB for file storage
+    const mediaFilesAdapter: StorageAdapter<File> = OPFSAdapter.isSupported()
+      ? new OPFSAdapter(`media-files-${projectId}`)
+      : new IndexedDBFileAdapter(
+          `${this.config.mediaDb}-${projectId}-files`,
+          "media-files",
+          this.config.version
+        );
 
     return { mediaMetadataAdapter, mediaFilesAdapter };
   }
